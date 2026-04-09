@@ -280,12 +280,11 @@ $("confirm-delete-btn").addEventListener("click", async () => {
   const collMap = {
     user: "users",
     course: "courses",
-    job: "jobs",
+    job: "offers",
     offer: "offers",
     cert: "certificates",
     payment: "payments"
   };
-  const coll = collMap[pendingDeleteType];
   const reloads = {
     user: loadUsers,
     course: loadCourses,
@@ -295,29 +294,41 @@ $("confirm-delete-btn").addEventListener("click", async () => {
     payment: loadPayments
   };
 
-  try {
-    console.log(`Deleting ${pendingDeleteType}: ${pendingDeleteId}`);
+  const coll = collMap[pendingDeleteType];
 
-    if (pendingDeleteType === "user" && pendingDeleteId === auth.currentUser?.uid) {
-      showToast("You cannot delete your own account", "error");
-      $("confirm-overlay").classList.remove("open");
-      pendingDeleteId = pendingDeleteType = null;
-      return;
-    }
-
-    await deleteDoc(doc(db, coll, pendingDeleteId));
-    showToast("Deleted successfully!");
-
-    if (reloads[pendingDeleteType]) {
-      await reloads[pendingDeleteType]();
-    }
-  } catch (err) {
-    console.error("Delete error:", err);
-    showToast("Error: " + err.message, "error");
+  if (!coll) {
+    showToast("Unknown type: " + pendingDeleteType, "error");
+    $("confirm-overlay").classList.remove("open");
+    pendingDeleteId = pendingDeleteType = null;
+    return;
   }
 
-  $("confirm-overlay").classList.remove("open");
-  pendingDeleteId = pendingDeleteType = null;
+  // Block self-delete
+  if (pendingDeleteType === "user" && pendingDeleteId === auth.currentUser?.uid) {
+    showToast("You cannot delete your own account", "error");
+    $("confirm-overlay").classList.remove("open");
+    pendingDeleteId = pendingDeleteType = null;
+    return;
+  }
+
+  const btn = $("confirm-delete-btn");
+  btn.disabled = true;
+  btn.textContent = "Deleting...";
+
+  try {
+    const ref = doc(db, coll, pendingDeleteId);
+    await deleteDoc(ref);
+    showToast("Deleted successfully!", "success");
+    if (reloads[pendingDeleteType]) await reloads[pendingDeleteType]();
+  } catch (err) {
+    console.error("Delete error:", err.code, err.message);
+    showToast("Delete failed: " + err.message, "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Delete";
+    $("confirm-overlay").classList.remove("open");
+    pendingDeleteId = pendingDeleteType = null;
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -487,17 +498,46 @@ $("user-save-btn").addEventListener("click", async () => {
 // ── DASHBOARD ──────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════
 async function renderDashboard() {
+  const now = new Date();
+  const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening";
+
   $("main-content").innerHTML = `
     <div class="page-header">
-      <div class="page-header-left"><h1>Dashboard</h1><p>Welcome back, ${currentUser?.email || "Admin"}</p></div>
+      <div class="page-header-left">
+        <h1>Dashboard</h1>
+        <p>${greeting}, <strong>${currentUser?.email || "Admin"}</strong> — here's what's happening today.</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+        ${now.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+      </div>
     </div>
+
+    <!-- KPI CARDS -->
     <div class="stat-grid stat-grid-4" id="dash-stats">
-      ${[1, 2, 3, 4].map(() => `<div class="stat-card"><div class="skeleton" style="height:80px;border-radius:8px;"></div></div>`).join("")}
+      ${[1, 2, 3, 4].map(() => `<div class="stat-card"><div class="skeleton" style="height:100px;border-radius:8px;"></div></div>`).join("")}
     </div>
+
+    <!-- ROW 2: recent users + role breakdown -->
+    <div class="grid-2" style="margin-bottom:20px;">
+      <div class="card">
+        <div class="card-header">
+          <h3>Recent Users</h3>
+          <button class="btn btn-outline" style="padding:6px 12px;font-size:12px;" onclick="navigate('users')">View all</button>
+        </div>
+        <div id="dash-recent"><div class="empty-state"><p>Loading...</p></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>User Roles</h3><span class="meta">Distribution</span></div>
+        <div id="dash-roles"></div>
+      </div>
+    </div>
+
+    <!-- ROW 3: quick stats + activity -->
     <div class="grid-2">
       <div class="card">
-        <div class="card-header"><h3>Recent Users</h3><span class="meta">Latest registrations</span></div>
-        <div id="dash-recent"><div class="empty-state"><p>Loading...</p></div></div>
+        <div class="card-header"><h3>Platform Overview</h3><span class="meta">All time</span></div>
+        <div id="dash-overview"></div>
       </div>
       <div class="card">
         <div class="card-header"><h3>Recent Activity</h3><span class="meta">Platform events</span></div>
@@ -505,11 +545,12 @@ async function renderDashboard() {
       </div>
     </div>`;
 
+  // Static activity feed
   $("dash-activity").innerHTML = [
     { color: "var(--primary)", bg: "var(--primary-light)", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>`, text: "New learner registered", time: "2 min ago" },
-    { color: "var(--success)", bg: "#dcfce7", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>`, text: "Payment of $149 received", time: "1 hr ago" },
+    { color: "var(--success)", bg: "#dcfce7", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>`, text: "Payment received", time: "1 hr ago" },
     { color: "var(--warning)", bg: "#fef9c3", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`, text: "New job offer posted", time: "3 hr ago" },
-    { color: "var(--accent)", bg: "#dbeafe", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>`, text: "Certificate issued to learner", time: "5 hr ago" },
+    { color: "var(--accent)", bg: "#dbeafe", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>`, text: "Certificate issued", time: "5 hr ago" },
     { color: "var(--danger)", bg: "#fee2e2", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`, text: "New course submitted", time: "Yesterday" },
   ].map(a => `
     <div class="activity-item">
@@ -522,57 +563,93 @@ async function renderDashboard() {
 
   try {
     const [usersSnap] = await Promise.all([getDocs(collection(db, "users"))]);
-    let coursesSize = 0, jobsSize = 0, certsSize = 0;
-    try { const cs = await getDocs(collection(db, "courses")); coursesSize = cs.size; } catch (_) { }
-    try { const js = await getDocs(collection(db, "offers")); jobsSize = js.size; } catch (_) { }
-    try { const ce = await getDocs(collection(db, "certificates")); certsSize = ce.size; } catch (_) { }
-    const total = usersSnap.size;
+    let coursesSnap, offersSnap, certsSnap, paymentsSnap;
+    try { coursesSnap = await getDocs(collection(db, "courses")); } catch (_) { }
+    try { offersSnap = await getDocs(collection(db, "offers")); } catch (_) { }
+    try { certsSnap = await getDocs(collection(db, "certificates")); } catch (_) { }
+    try { paymentsSnap = await getDocs(collection(db, "payments")); } catch (_) { }
 
-    $("dash-stats").innerHTML = `
+    const totalUsers = usersSnap.size;
+    const totalCourses = coursesSnap?.size || 0;
+    const totalJobs = offersSnap?.size || 0;
+    const totalCerts = certsSnap?.size || 0;
+    const totalRevenue = paymentsSnap?.docs
+      .filter(d => d.data().status === "Completed")
+      .reduce((s, d) => s + (parseFloat(d.data().amount) || 0), 0) || 0;
+
+    // ── KPI Cards
+    const kpis = [
+      { label: "Total Users", value: totalUsers, icon: `<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, grad: "var(--primary),#6b63ff", trend: "+12%" },
+      { label: "Courses", value: totalCourses, icon: `<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>`, grad: "var(--accent),#0ea5e9", trend: "+5%" },
+      { label: "Job Offers", value: totalJobs, icon: `<rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>`, grad: "var(--warning),#f97316", trend: "+8%" },
+      { label: "Certificates", value: totalCerts, icon: `<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>`, grad: "var(--success),#16a34a", trend: "+21%" },
+    ];
+    $("dash-stats").innerHTML = kpis.map(k => `
       <div class="stat-card">
         <div class="stat-card-top">
-          <div class="stat-icon" style="background:linear-gradient(135deg,var(--primary),#6b63ff)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-          <div class="stat-trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>+12%</div>
+          <div class="stat-icon" style="background:linear-gradient(135deg,${k.grad})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${k.icon}</svg>
+          </div>
+          <div class="stat-trend up">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>${k.trend}
+          </div>
         </div>
-        <div class="stat-label">Total Users</div><div class="stat-value">${total}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-top">
-          <div class="stat-icon" style="background:linear-gradient(135deg,var(--accent),#0ea5e9)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>
-          <div class="stat-trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>+5%</div>
+        <div class="stat-label">${k.label}</div>
+        <div class="stat-value">${k.value}</div>
+      </div>`).join("");
+
+    // ── Recent Users
+    const recent = usersSnap.docs.slice(0, 6);
+    $("dash-recent").innerHTML = recent.length ? recent.map(d => {
+      const u = d.data();
+      return `<div class="profile-row">
+        <div class="profile-avatar">${(u.name || u.email || "?").charAt(0).toUpperCase()}</div>
+        <div class="profile-info">
+          <div class="profile-name">${u.name || "—"}</div>
+          <div class="profile-sub">${u.email || ""}</div>
         </div>
-        <div class="stat-label">Courses</div><div class="stat-value">${coursesSize}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-top">
-          <div class="stat-icon" style="background:linear-gradient(135deg,var(--warning),#f97316)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
-          <div class="stat-trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>+8%</div>
-        </div>
-        <div class="stat-label">Job Offers</div><div class="stat-value">${jobsSize}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-top">
-          <div class="stat-icon" style="background:linear-gradient(135deg,var(--success),#16a34a)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg></div>
-          <div class="stat-trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>+21%</div>
-        </div>
-        <div class="stat-label">Certificates</div><div class="stat-value">${certsSize}</div>
+        ${roleBadge(u.role)}
       </div>`;
+    }).join("") : `<div class="empty-state"><p>No users yet</p></div>`;
 
-    const recent = usersSnap.docs.slice(0, 5);
-    $("dash-recent").innerHTML = recent.length ? `
-      <div class="table-wrap"><table>
-        <tr><th>Name</th><th>Role</th></tr>
-        ${recent.map(d => {
-      const u = d.data(); return `
-          <tr>
-            <td><div style="display:flex;align-items:center;gap:10px;">
-              <div class="avatar" style="width:30px;height:30px;font-size:11px;">${(u.name || u.email || "?").charAt(0).toUpperCase()}</div>
-              <div><div style="font-weight:600;font-size:13.5px;">${u.name || "—"}</div><div style="font-size:12px;color:var(--muted);">${u.email || ""}</div></div>
-            </div></td>
-            <td>${roleBadge(u.role)}</td>
-          </tr>`;
-    }).join("")}
-      </table></div>` : `<div class="empty-state"><p>No users yet</p></div>`;
+    // ── Role Breakdown
+    const roleCounts = {};
+    usersSnap.docs.forEach(d => {
+      const r = d.data().role || "Unknown";
+      roleCounts[r] = (roleCounts[r] || 0) + 1;
+    });
+    const roleColors = { Admin: "var(--primary)", Instructor: "var(--accent)", Learner: "var(--success)", Recruiter: "var(--warning)", Unknown: "var(--muted)" };
+    const roleBadgeMap = { Admin: "badge-purple", Instructor: "badge-blue", Learner: "badge-green", Recruiter: "badge-orange", Unknown: "badge-gray" };
+    $("dash-roles").innerHTML = totalUsers ? Object.entries(roleCounts).map(([role, count]) => {
+      const pct = Math.round((count / totalUsers) * 100);
+      return `<div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span class="badge ${roleBadgeMap[role] || "badge-gray"}">${role}</span>
+          <span style="font-size:13px;font-weight:700;color:var(--text);">${count} <span style="color:var(--muted);font-weight:400;">(${pct}%)</span></span>
+        </div>
+        <div class="progress-bar" style="height:8px;">
+          <div class="progress-fill" style="width:${pct}%;background:${roleColors[role] || "var(--muted)"};"></div>
+        </div>
+      </div>`;
+    }).join("") : `<div class="empty-state"><p>No users yet</p></div>`;
+
+    // ── Platform Overview quick stats
+    const activeJobs = offersSnap?.docs.filter(d => d.data().status === "Active").length || 0;
+    const overviewItems = [
+      { label: "Total Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: "💰", color: "var(--success)" },
+      { label: "Active Job Offers", value: activeJobs, icon: "✅", color: "var(--accent)" },
+      { label: "Courses Published", value: totalCourses, icon: "📚", color: "var(--primary)" },
+      { label: "Certs Issued", value: totalCerts, icon: "🏅", color: "var(--warning)" },
+    ];
+    $("dash-overview").innerHTML = overviewItems.map(o => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:38px;height:38px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:18px;">${o.icon}</div>
+          <span style="font-size:14px;font-weight:500;color:var(--text);">${o.label}</span>
+        </div>
+        <span style="font-size:18px;font-weight:800;color:${o.color};font-family:'Outfit',sans-serif;">${o.value}</span>
+      </div>`).join("").replace(/border-bottom:1px solid var\(--border\);">(?![\s\S]*border-bottom)/, "border-bottom:none;\">");
+
   } catch (err) {
     $("dash-stats").innerHTML = `<div style="grid-column:1/-1"><div class="empty-state"><p>Error: ${err.message}</p></div></div>`;
   }
@@ -979,67 +1056,202 @@ function filterPayments() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ── STATISTICS & SETTINGS ──────────────────────────────────────
+// ── STATISTICS ─────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════
 async function renderStatistics() {
   $("main-content").innerHTML = `
     <div class="page-header">
-      <div class="page-header-left"><h1>Statistics</h1><p>Platform analytics and insights</p></div>
+      <div class="page-header-left"><h1>Statistics</h1><p>Platform analytics and performance insights</p></div>
     </div>
-    <div class="card">
-      <div class="card-header"><h3>Platform Statistics</h3></div>
-      <div id="stats-content"><div class="empty-state"><p>Loading statistics...</p></div></div>
-    </div>`;
+    <div id="stats-loading">
+      <div class="stat-grid stat-grid-4" style="margin-bottom:20px;">
+        ${[1, 2, 3, 4].map(() => `<div class="stat-card"><div class="skeleton" style="height:100px;border-radius:8px;"></div></div>`).join("")}
+      </div>
+      <div class="grid-2">
+        <div class="card"><div class="skeleton" style="height:220px;border-radius:8px;"></div></div>
+        <div class="card"><div class="skeleton" style="height:220px;border-radius:8px;"></div></div>
+      </div>
+    </div>
+    <div id="stats-content" style="display:none;"></div>`;
 
   try {
     const [usersSnap, coursesSnap] = await Promise.all([
       getDocs(collection(db, "users")),
       getDocs(collection(db, "courses"))
     ]);
-
-    let certsSnap, jobsSnap, paymentsSnap;
+    let certsSnap, offersSnap, paymentsSnap;
     try { certsSnap = await getDocs(collection(db, "certificates")); } catch (_) { }
-    try { jobsSnap = await getDocs(collection(db, "offers")); } catch (_) { }
+    try { offersSnap = await getDocs(collection(db, "offers")); } catch (_) { }
     try { paymentsSnap = await getDocs(collection(db, "payments")); } catch (_) { }
 
     const totalUsers = usersSnap.size;
     const totalCourses = coursesSnap.size;
     const totalCerts = certsSnap?.size || 0;
-    const totalJobs = jobsSnap?.size || 0;
+    const totalOffers = offersSnap?.size || 0;
     const totalRevenue = paymentsSnap?.docs.filter(d => d.data().status === "Completed").reduce((s, d) => s + (parseFloat(d.data().amount) || 0), 0) || 0;
+    const pendingRev = paymentsSnap?.docs.filter(d => d.data().status === "Pending").reduce((s, d) => s + (parseFloat(d.data().amount) || 0), 0) || 0;
+    const totalTx = paymentsSnap?.size || 0;
 
+    // Role breakdown
+    const roleCounts = {};
+    usersSnap.docs.forEach(d => { const r = d.data().role || "Unknown"; roleCounts[r] = (roleCounts[r] || 0) + 1; });
+    const roleColors = { Admin: "var(--primary)", Instructor: "var(--accent)", Learner: "var(--success)", Recruiter: "var(--warning)", Unknown: "var(--muted)" };
+    const roleBadgeMap = { Admin: "badge-purple", Instructor: "badge-blue", Learner: "badge-green", Recruiter: "badge-orange", Unknown: "badge-gray" };
+
+    // Job status breakdown
+    const jobStatus = { Active: 0, Pending: 0, Closed: 0 };
+    offersSnap?.docs.forEach(d => { const s = d.data().status || "Active"; if (jobStatus[s] !== undefined) jobStatus[s]++; });
+
+    // Course type breakdown
+    const courseTypes = {};
+    coursesSnap.docs.forEach(d => { const t = d.data().type || "Other"; courseTypes[t] = (courseTypes[t] || 0) + 1; });
+    const typeColors = { PDF: "#ef4444", MP4: "#3b82f6", PPTX: "#f97316", DOC: "#8b5cf6", MP3: "#22c55e", Other: "#64748b" };
+
+    // Cert grade breakdown
+    const gradeCount = { Distinction: 0, Merit: 0, Pass: 0 };
+    certsSnap?.docs.forEach(d => { const g = d.data().grade; if (gradeCount[g] !== undefined) gradeCount[g]++; });
+
+    $("stats-loading").style.display = "none";
+    $("stats-content").style.display = "block";
     $("stats-content").innerHTML = `
+
+      <!-- KPI Row -->
       <div class="stat-grid stat-grid-4" style="margin-bottom:20px;">
         <div class="stat-card">
-          <div class="stat-icon" style="background:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
-          <div class="stat-label">Total Users</div><div class="stat-value">${totalUsers}</div>
+          <div class="stat-card-top">
+            <div class="stat-icon" style="background:linear-gradient(135deg,var(--primary),#6b63ff)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div class="stat-trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>Live</div>
+          </div>
+          <div class="stat-label">Total Users</div>
+          <div class="stat-value">${totalUsers}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon" style="background:var(--accent)"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/></svg></div>
-          <div class="stat-label">Total Courses</div><div class="stat-value">${totalCourses}</div>
+          <div class="stat-card-top">
+            <div class="stat-icon" style="background:linear-gradient(135deg,var(--success),#16a34a)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+            </div>
+            <div class="stat-trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>Live</div>
+          </div>
+          <div class="stat-label">Total Revenue</div>
+          <div class="stat-value">$${totalRevenue.toFixed(0)}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon" style="background:var(--warning)"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/></svg></div>
-          <div class="stat-label">Job Offers</div><div class="stat-value">${totalJobs}</div>
+          <div class="stat-card-top">
+            <div class="stat-icon" style="background:linear-gradient(135deg,var(--accent),#0ea5e9)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+            </div>
+            <div class="stat-trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>Live</div>
+          </div>
+          <div class="stat-label">Total Courses</div>
+          <div class="stat-value">${totalCourses}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon" style="background:var(--success)"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/></svg></div>
-          <div class="stat-label">Total Revenue</div><div class="stat-value">$${totalRevenue.toFixed(2)}</div>
+          <div class="stat-card-top">
+            <div class="stat-icon" style="background:linear-gradient(135deg,var(--warning),#f97316)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+            </div>
+            <div class="stat-trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>Live</div>
+          </div>
+          <div class="stat-label">Certificates Issued</div>
+          <div class="stat-value">${totalCerts}</div>
         </div>
       </div>
-      <div class="grid-2">
-        <div class="info-box">
-          <h4>Certificates Issued</h4>
-          <p style="font-size:32px;font-weight:700;color:var(--primary);">${totalCerts}</p>
+
+      <!-- Row 2: Users by Role + Course Types -->
+      <div class="grid-2" style="margin-bottom:20px;">
+        <div class="card">
+          <div class="card-header"><h3>Users by Role</h3><span class="meta">${totalUsers} total</span></div>
+          ${totalUsers ? Object.entries(roleCounts).map(([role, count]) => {
+      const pct = Math.round((count / totalUsers) * 100);
+      return `<div style="margin-bottom:16px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+                <span class="badge ${roleBadgeMap[role] || "badge-gray"}">${role}</span>
+                <span style="font-size:13px;font-weight:700;">${count} <span style="color:var(--muted);font-weight:400;">(${pct}%)</span></span>
+              </div>
+              <div class="progress-bar" style="height:10px;">
+                <div class="progress-fill" style="width:${pct}%;background:${roleColors[role] || "var(--muted)"};"></div>
+              </div>
+            </div>`;
+    }).join("") : `<div class="empty-state"><p>No users yet</p></div>`}
         </div>
-        <div class="info-box">
-          <h4>Active Jobs</h4>
-          <p style="font-size:32px;font-weight:700;color:var(--accent);">${jobsSnap?.docs.filter(d => d.data().status === "Active").length || 0}</p>
+        <div class="card">
+          <div class="card-header"><h3>Course Types</h3><span class="meta">${totalCourses} total</span></div>
+          ${totalCourses ? Object.entries(courseTypes).map(([type, count]) => {
+      const pct = Math.round((count / totalCourses) * 100);
+      return `<div style="margin-bottom:16px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+                <span class="badge" style="background:${typeColors[type] || "#64748b"}22;color:${typeColors[type] || "#64748b"};">${type}</span>
+                <span style="font-size:13px;font-weight:700;">${count} <span style="color:var(--muted);font-weight:400;">(${pct}%)</span></span>
+              </div>
+              <div class="progress-bar" style="height:10px;">
+                <div class="progress-fill" style="width:${pct}%;background:${typeColors[type] || "#64748b"};"></div>
+              </div>
+            </div>`;
+    }).join("") : `<div class="empty-state"><p>No courses yet</p></div>`}
         </div>
       </div>
-    `;
+
+      <!-- Row 3: Job Offers Status + Payments + Certs -->
+      <div class="grid-2" style="margin-bottom:20px;">
+        <div class="card">
+          <div class="card-header"><h3>Job Offers Status</h3><span class="meta">${totalOffers} total</span></div>
+          ${[
+        { label: "Active", count: jobStatus.Active, color: "var(--success)", badge: "badge-green" },
+        { label: "Pending", count: jobStatus.Pending, color: "var(--warning)", badge: "badge-orange" },
+        { label: "Closed", count: jobStatus.Closed, color: "var(--muted)", badge: "badge-gray" },
+      ].map(s => {
+        const pct = totalOffers ? Math.round((s.count / totalOffers) * 100) : 0;
+        return `<div style="margin-bottom:16px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+                <span class="badge ${s.badge}">${s.label}</span>
+                <span style="font-size:13px;font-weight:700;">${s.count} <span style="color:var(--muted);font-weight:400;">(${pct}%)</span></span>
+              </div>
+              <div class="progress-bar" style="height:10px;">
+                <div class="progress-fill" style="width:${pct}%;background:${s.color};"></div>
+              </div>
+            </div>`;
+      }).join("")}
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Payments Summary</h3><span class="meta">${totalTx} transactions</span></div>
+          ${[
+        { icon: "💰", label: "Completed Revenue", value: `$${totalRevenue.toFixed(2)}`, color: "var(--success)" },
+        { icon: "⏳", label: "Pending Amount", value: `$${pendingRev.toFixed(2)}`, color: "var(--warning)" },
+        { icon: "🧾", label: "Total Transactions", value: totalTx, color: "var(--primary)" },
+      ].map(p => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border);">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:38px;height:38px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:18px;">${p.icon}</div>
+                <span style="font-size:14px;font-weight:500;">${p.label}</span>
+              </div>
+              <span style="font-size:17px;font-weight:800;color:${p.color};font-family:'Outfit',sans-serif;">${p.value}</span>
+            </div>`).join("")}
+        </div>
+      </div>
+
+      <!-- Row 4: Certificate Grades -->
+      <div class="card">
+        <div class="card-header"><h3>Certificate Grades</h3><span class="meta">${totalCerts} issued</span></div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding-top:4px;">
+          ${[
+        { label: "Distinction", count: gradeCount.Distinction, color: "#8b5cf6", bg: "#ede9fe", icon: "🥇" },
+        { label: "Merit", count: gradeCount.Merit, color: "#3b82f6", bg: "#dbeafe", icon: "🥈" },
+        { label: "Pass", count: gradeCount.Pass, color: "#22c55e", bg: "#dcfce7", icon: "🥉" },
+      ].map(g => `
+            <div style="background:${g.bg};border-radius:12px;padding:20px;text-align:center;">
+              <div style="font-size:28px;margin-bottom:8px;">${g.icon}</div>
+              <div style="font-size:28px;font-weight:800;color:${g.color};font-family:'Outfit',sans-serif;">${g.count}</div>
+              <div style="font-size:13px;font-weight:600;color:${g.color};margin-top:4px;">${g.label}</div>
+            </div>`).join("")}
+        </div>
+      </div>`;
+
   } catch (err) {
-    $("stats-content").innerHTML = `<div class="empty-state"><p>Error: ${err.message}</p></div>`;
+    $("stats-loading").style.display = "none";
+    $("stats-content").style.display = "block";
+    $("stats-content").innerHTML = `<div class="empty-state"><p>Error loading statistics: ${err.message}</p></div>`;
   }
 }
 
