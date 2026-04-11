@@ -38,6 +38,55 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// ── Translation System ────────────────────────────────────────
+let translations = {};
+let currentLanguage = localStorage.getItem('language') || 'en';
+
+async function loadTranslations(lang) {
+  try {
+    const response = await fetch(`${lang}.json`);
+    translations = await response.json();
+    currentLanguage = lang;
+    localStorage.setItem('language', lang);
+    document.documentElement.lang = lang;
+    if (lang === 'ar') {
+      document.documentElement.dir = 'rtl';
+      document.body.classList.add('rtl');
+    } else {
+      document.documentElement.dir = 'ltr';
+      document.body.classList.remove('rtl');
+    }
+  } catch (error) {
+    console.error('Failed to load translations:', error);
+  }
+}
+
+function t(key) {
+  return translations[key] || key;
+}
+
+function changeLanguage(lang) {
+  loadTranslations(lang).then(() => {
+    // Re-render current page to apply translations
+    const currentPage = window.location.hash.substring(1) || 'dashboard';
+    buildSidebar(); // Rebuild sidebar with new translations
+    navigate(currentPage); // This will update header title and re-render page
+    showToast(`Language changed to ${lang.toUpperCase()}`, 'success');
+  });
+}
+
+// ── Dark Mode System ──────────────────────────────────────────
+function toggleDarkMode(enabled) {
+  localStorage.setItem('darkMode', enabled);
+  document.body.classList.toggle('dark-mode', enabled);
+  showToast(`Switched to ${enabled ? 'dark' : 'light'} mode`, 'success');
+}
+
+function initTheme() {
+  const darkMode = localStorage.getItem('darkMode') === 'true';
+  document.body.classList.toggle('dark-mode', darkMode);
+}
+
 // ── State ─────────────────────────────────────────────────────
 let currentUser = null;
 let editingUserId = null;
@@ -95,7 +144,7 @@ async function doLogin() {
   const email = $("login-email").value.trim();
   const password = $("login-password").value.trim();
   const btn = $("login-btn");
-  if (!email || !password) { showToast("Please fill in all fields", "error"); return; }
+  if (!email || !password) { showToast(t('fillAllRequiredFields'), "error"); return; }
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div> Signing in...';
   try {
@@ -120,8 +169,14 @@ async function doLogin() {
     $("app-screen").classList.add("active");
     $("header-email").textContent = currentUser.email;
     $("header-avatar").textContent = currentUser.email.charAt(0).toUpperCase();
-    showToast("Welcome back, Admin!");
-    buildSidebar(); renderNotifs(); navigate("dashboard");
+    showToast(t('welcomeBackAdmin'));
+    renderNotifs(); navigate("dashboard");
+
+    // Initialize translations and theme
+    loadTranslations(currentLanguage).then(() => {
+      buildSidebar(); // Build sidebar after translations are loaded
+      initTheme();
+    });
   } catch (err) {
     const friendly = {
       "auth/invalid-email": "Invalid email address.",
@@ -146,19 +201,19 @@ $("logout-btn").addEventListener("click", async () => {
 
 // ── SIDEBAR ───────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { section: "Overview" },
-  { id: "dashboard", label: "Dashboard", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>` },
-  { id: "statistics", label: "Statistics", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>` },
-  { section: "Content" },
-  { id: "users", label: "Users", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
-  { id: "courses", label: "Courses", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>` },
-  { id: "certificates", label: "Certificates", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>` },
-  { section: "Careers" },
-  { id: "jobs", label: "Job Offers", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>` },
-  { section: "Finance" },
-  { id: "payments", label: "Payments", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>` },
-  { section: "System" },
-  { id: "settings", label: "Settings", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>` },
+  { section: "nav_overview" },
+  { id: "dashboard", label: "nav_dashboard", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>` },
+  { id: "statistics", label: "nav_statistics", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>` },
+  { section: "nav_content" },
+  { id: "users", label: "nav_users", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
+  { id: "courses", label: "nav_courses", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>` },
+  { id: "certificates", label: "nav_certificates", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>` },
+  { section: "nav_careers" },
+  { id: "jobs", label: "nav_jobs", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>` },
+  { section: "nav_finance" },
+  { id: "payments", label: "nav_payments", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>` },
+  { section: "nav_system" },
+  { id: "settings", label: "nav_settings", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>` },
 ];
 
 function buildSidebar() {
@@ -168,14 +223,14 @@ function buildSidebar() {
     if (item.section) {
       const sec = document.createElement("div");
       sec.className = "nav-section";
-      sec.textContent = item.section;
+      sec.textContent = t(item.section);
       nav.appendChild(sec);
       return;
     }
     const btn = document.createElement("button");
     btn.className = "nav-item";
     btn.dataset.id = item.id;
-    btn.innerHTML = item.icon + `<span>${item.label}</span>`;
+    btn.innerHTML = item.icon + `<span>${t(item.label)}</span>`;
     btn.addEventListener("click", () => { navigate(item.id); closeMobileSidebar(); });
     nav.appendChild(btn);
   });
@@ -185,7 +240,16 @@ let currentPage = "";
 function navigate(page) {
   currentPage = page;
   document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.id === page));
-  const titles = { dashboard: "Dashboard", users: "User Management", courses: "Courses", certificates: "Certificates", jobs: "Job Offers", payments: "Payments", statistics: "Statistics", settings: "Settings" };
+  const titles = { 
+    dashboard: t('dashboard'), 
+    users: t('userManagement'), 
+    courses: t('courses'), 
+    certificates: t('certificates'), 
+    jobs: t('jobOffers'), 
+    payments: t('payments'), 
+    statistics: t('statistics'), 
+    settings: t('settings') 
+  };
   $("header-title").textContent = titles[page] || page;
   const pages = { dashboard: renderDashboard, users: loadUsers, courses: loadCourses, certificates: loadCertificates, jobs: loadJobs, payments: loadPayments, statistics: renderStatistics, settings: renderSettings };
   if (pages[page]) pages[page]();
@@ -305,7 +369,7 @@ $("confirm-delete-btn").addEventListener("click", async () => {
 
   // Block self-delete
   if (pendingDeleteType === "user" && pendingDeleteId === auth.currentUser?.uid) {
-    showToast("You cannot delete your own account", "error");
+    showToast(t('cannotDeleteOwnAccount'), "error");
     $("confirm-overlay").classList.remove("open");
     pendingDeleteId = pendingDeleteType = null;
     return;
@@ -313,19 +377,19 @@ $("confirm-delete-btn").addEventListener("click", async () => {
 
   const btn = $("confirm-delete-btn");
   btn.disabled = true;
-  btn.textContent = "Deleting...";
+  btn.textContent = t('deleting');
 
   try {
     const ref = doc(db, coll, pendingDeleteId);
     await deleteDoc(ref);
-    showToast("Deleted successfully!", "success");
+    showToast(t('deletedSuccessfully'), "success");
     if (reloads[pendingDeleteType]) await reloads[pendingDeleteType]();
   } catch (err) {
     console.error("Delete error:", err.code, err.message);
-    showToast("Delete failed: " + err.message, "error");
+    showToast(t('deleteFailed') + ": " + err.message, "error");
   } finally {
     btn.disabled = false;
-    btn.textContent = "Delete";
+    btn.textContent = t('delete');
     $("confirm-overlay").classList.remove("open");
     pendingDeleteId = pendingDeleteType = null;
   }
@@ -337,15 +401,15 @@ $("confirm-delete-btn").addEventListener("click", async () => {
 async function loadUsers() {
   $("main-content").innerHTML = `
     <div class="page-header">
-      <div class="page-header-left"><h1>User Management</h1><p>Manage all platform users</p></div>
+      <div class="page-header-left"><h1>${t('userManagement')}</h1><p>${t('managePlatformUsers')}</p></div>
     </div>
     <div class="card">
       <div class="toolbar">
-        <div class="search-bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="user-search" placeholder="Search by name or email..." /></div>
-        <select class="filter-select" id="role-filter"><option value="">All Roles</option><option>Admin</option><option>Instructor</option><option>Learner</option><option>Recruiter</option></select>
-        <button class="btn btn-purple" id="add-user-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Add User</button>
+        <div class="search-bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="user-search" placeholder="${t('searchByNameOrEmail')}" /></div>
+        <select class="filter-select" id="role-filter"><option value="">${t('allRoles')}</option><option>Admin</option><option>Instructor</option><option>Learner</option><option>Recruiter</option></select>
+        <button class="btn btn-purple" id="add-user-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>${t('addUser')}</button>
       </div>
-      <div id="users-table-wrap"><div class="empty-state"><p>Loading...</p></div></div>
+      <div id="users-table-wrap"><div class="empty-state"><p>${t('loading')}</p></div></div>
     </div>`;
 
   $("add-user-btn").addEventListener("click", openAddUser);
@@ -365,12 +429,12 @@ async function loadUsers() {
 function renderUsersTable(users) {
   const wrap = $("users-table-wrap");
   if (!users?.length) {
-    wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><h4>No users found</h4></div>`;
+    wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><h4>${t('noUsersFound')}</h4></div>`;
     return;
   }
 
   wrap.innerHTML = `<div class="table-wrap"><table>
-    <tr><th>User</th><th>Email</th><th>Role</th><th>Actions</th></tr>
+    <tr><th>${t('user')}</th><th>${t('email')}</th><th>${t('role')}</th><th>${t('actions')}</th></tr>
     ${users.map(u => `<tr>
       <td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:32px;height:32px;font-size:12px;">${(u.name || u.email || "?").charAt(0).toUpperCase()}</div><strong>${u.name || "—"}</strong></div></td>
       <td style="color:var(--muted)">${u.email || ""}</td>
@@ -407,8 +471,8 @@ function openAddUser() {
   editingUserId = null;
   ["u-name", "u-email", "u-password", "u-phone"].forEach(id => $(id) && ($(id).value = ""));
   $("u-type").value = "Learner";
-  $("user-modal-title").textContent = "Add User";
-  $("user-save-btn").textContent = "Add User";
+  $("user-modal-title").textContent = t('addUser');
+  $("user-save-btn").textContent = t('addUser');
   $("u-pw-wrap").style.display = "block";
   openModal("user-modal");
 }
@@ -419,8 +483,8 @@ function editUser(id, name, email, role) {
   $("u-email").value = email;
   $("u-type").value = role;
   $("u-password").value = "";
-  $("user-modal-title").textContent = "Edit User";
-  $("user-save-btn").textContent = "Save Changes";
+  $("user-modal-title").textContent = t('edit');
+  $("user-save-btn").textContent = t('saveChanges');
   $("u-pw-wrap").style.display = "none";
   openModal("user-modal");
 }
@@ -436,23 +500,23 @@ $("user-save-btn").addEventListener("click", async () => {
   const password = $("u-password").value.trim();
 
   if (!name || !email) {
-    showToast("Fill all required fields", "error");
+    showToast(t('fillAllRequiredFields'), "error");
     return;
   }
 
   const btn = $("user-save-btn");
   btn.disabled = true;
-  btn.textContent = "Saving...";
+  btn.textContent = t('saving');
 
   try {
     if (editingUserId) {
       await updateDoc(doc(db, "users", editingUserId), { name, email, role, phone });
-      showToast("User updated");
+      showToast(t('userUpdated'));
     } else {
       if (!password || password.length < 6) {
-        showToast("Password must be at least 6 characters", "error");
+        showToast(t('passwordAtLeast6Chars'), "error");
         btn.disabled = false;
-        btn.textContent = "Add User";
+        btn.textContent = t('addUser');
         return;
       }
 
@@ -468,17 +532,17 @@ $("user-save-btn").addEventListener("click", async () => {
           createdAt: serverTimestamp()
         });
 
-        showToast("User added successfully!");
+        showToast(t('userAddedSuccessfully'));
       } catch (authError) {
         let errorMsg = authError.message;
         if (authError.code === "auth/email-already-in-use") {
-          errorMsg = "This email is already registered";
+          errorMsg = t('emailAlreadyRegistered');
         } else if (authError.code === "auth/weak-password") {
-          errorMsg = "Password should be at least 6 characters";
+          errorMsg = t('passwordAtLeast6Chars');
         }
-        showToast("Error: " + errorMsg, "error");
+        showToast(t('errorMsg') + ": " + errorMsg, "error");
         btn.disabled = false;
-        btn.textContent = "Add User";
+        btn.textContent = t('addUser');
         return;
       }
     }
@@ -522,13 +586,13 @@ async function renderDashboard() {
     <div class="grid-2" style="margin-bottom:20px;">
       <div class="card">
         <div class="card-header">
-          <h3>Recent Users</h3>
-          <button class="btn btn-outline" style="padding:6px 12px;font-size:12px;" onclick="navigate('users')">View all</button>
+          <h3>${t('recentUsers')}</h3>
+          <button class="btn btn-outline" style="padding:6px 12px;font-size:12px;" onclick="navigate('users')">${t('viewAll')}</button>
         </div>
         <div id="dash-recent"><div class="empty-state"><p>Loading...</p></div></div>
       </div>
       <div class="card">
-        <div class="card-header"><h3>User Roles</h3><span class="meta">Distribution</span></div>
+        <div class="card-header"><h3>${t('userRoles')}</h3><span class="meta">${t('distribution')}</span></div>
         <div id="dash-roles"></div>
       </div>
     </div>
@@ -536,22 +600,22 @@ async function renderDashboard() {
     <!-- ROW 3: quick stats + activity -->
     <div class="grid-2">
       <div class="card">
-        <div class="card-header"><h3>Platform Overview</h3><span class="meta">All time</span></div>
+        <div class="card-header"><h3>${t('platformOverview')}</h3><span class="meta">${t('allTime')}</span></div>
         <div id="dash-overview"></div>
       </div>
       <div class="card">
-        <div class="card-header"><h3>Recent Activity</h3><span class="meta">Platform events</span></div>
+        <div class="card-header"><h3>${t('recentActivity')}</h3><span class="meta">${t('platformEvents')}</span></div>
         <div id="dash-activity"></div>
       </div>
     </div>`;
 
   // Static activity feed
   $("dash-activity").innerHTML = [
-    { color: "var(--primary)", bg: "var(--primary-light)", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>`, text: "New learner registered", time: "2 min ago" },
-    { color: "var(--success)", bg: "#dcfce7", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>`, text: "Payment received", time: "1 hr ago" },
-    { color: "var(--warning)", bg: "#fef9c3", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`, text: "New job offer posted", time: "3 hr ago" },
-    { color: "var(--accent)", bg: "#dbeafe", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>`, text: "Certificate issued", time: "5 hr ago" },
-    { color: "var(--danger)", bg: "#fee2e2", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`, text: "New course submitted", time: "Yesterday" },
+    { color: "var(--primary)", bg: "var(--primary-light)", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>`, text: t('newLearnerReg'), time: "2 min ago" },
+    { color: "var(--success)", bg: "#dcfce7", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>`, text: t('paymentReceived'), time: "1 hr ago" },
+    { color: "var(--warning)", bg: "#fef9c3", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`, text: t('newJobPosted'), time: "3 hr ago" },
+    { color: "var(--accent)", bg: "#dbeafe", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>`, text: t('certIssued'), time: "5 hr ago" },
+    { color: "var(--danger)", bg: "#fee2e2", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`, text: t('newCourseSubmitted'), time: "Yesterday" },
   ].map(a => `
     <div class="activity-item">
       <div class="activity-dot" style="background:${a.bg};color:${a.color};">${a.icon}</div>
@@ -579,10 +643,10 @@ async function renderDashboard() {
 
     // ── KPI Cards
     const kpis = [
-      { label: "Total Users", value: totalUsers, icon: `<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, grad: "var(--primary),#6b63ff", trend: "+12%" },
-      { label: "Courses", value: totalCourses, icon: `<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>`, grad: "var(--accent),#0ea5e9", trend: "+5%" },
-      { label: "Job Offers", value: totalJobs, icon: `<rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>`, grad: "var(--warning),#f97316", trend: "+8%" },
-      { label: "Certificates", value: totalCerts, icon: `<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>`, grad: "var(--success),#16a34a", trend: "+21%" },
+      { label: t('totalUsers'), value: totalUsers, icon: `<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, grad: "var(--primary),#6b63ff", trend: "+12%" },
+      { label: t('courses'), value: totalCourses, icon: `<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>`, grad: "var(--accent),#0ea5e9", trend: "+5%" },
+      { label: t('jobOffers'), value: totalJobs, icon: `<rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>`, grad: "var(--warning),#f97316", trend: "+8%" },
+      { label: t('certificates'), value: totalCerts, icon: `<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>`, grad: "var(--success),#16a34a", trend: "+21%" },
     ];
     $("dash-stats").innerHTML = kpis.map(k => `
       <div class="stat-card">
@@ -631,15 +695,15 @@ async function renderDashboard() {
           <div class="progress-fill" style="width:${pct}%;background:${roleColors[role] || "var(--muted)"};"></div>
         </div>
       </div>`;
-    }).join("") : `<div class="empty-state"><p>No users yet</p></div>`;
+    }).join("") : `<div class="empty-state"><p>${t('noUsersFound')}</p></div>`;
 
     // ── Platform Overview quick stats
     const activeJobs = offersSnap?.docs.filter(d => d.data().status === "Active").length || 0;
     const overviewItems = [
-      { label: "Total Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: "💰", color: "var(--success)" },
-      { label: "Active Job Offers", value: activeJobs, icon: "✅", color: "var(--accent)" },
-      { label: "Courses Published", value: totalCourses, icon: "📚", color: "var(--primary)" },
-      { label: "Certs Issued", value: totalCerts, icon: "🏅", color: "var(--warning)" },
+      { label: t('totalRevenue'), value: `$${totalRevenue.toFixed(2)}`, icon: "💰", color: "var(--success)" },
+      { label: t('activeJobOffers'), value: activeJobs, icon: "✅", color: "var(--accent)" },
+      { label: t('coursesPublished'), value: totalCourses, icon: "📚", color: "var(--primary)" },
+      { label: t('certsIssued'), value: totalCerts, icon: "🏅", color: "var(--warning)" },
     ];
     $("dash-overview").innerHTML = overviewItems.map(o => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border);">
@@ -660,12 +724,12 @@ async function renderDashboard() {
 async function loadCourses() {
   $("main-content").innerHTML = `
     <div class="page-header">
-      <div class="page-header-left"><h1>Courses</h1><p>Manage all platform courses</p></div>
+      <div class="page-header-left"><h1>${t('courses')}</h1><p>${t('managePlatformCourses')}</p></div>
     </div>
     <div class="card">
       <div class="toolbar">
-        <div class="search-bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="course-search" placeholder="Search courses..." /></div>
-        <button class="btn btn-purple" id="add-course-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>Add Course</button>
+        <div class="search-bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="course-search" placeholder="${t('searchCourses')}" /></div>
+        <button class="btn btn-purple" id="add-course-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>${t('addCourse')}</button>
       </div>
       <div id="courses-table-wrap"><div class="empty-state"><p>Loading...</p></div></div>
     </div>`;
@@ -681,16 +745,16 @@ async function loadCourses() {
 
 function renderCoursesTable(courses) {
   const wrap = $("courses-table-wrap");
-  if (!courses?.length) { wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg><h4>No courses yet</h4></div>`; return; }
+  if (!courses?.length) { wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg><h4>${t('noCoursesYet')}</h4></div>`; return; }
   const typeBadge = { PDF: "badge-red", MP4: "badge-blue", PPTX: "badge-orange", DOC: "badge-purple", MP3: "badge-green" };
   wrap.innerHTML = `<div class="table-wrap"><table>
-    <tr><th>Course</th><th>Instructor</th><th>Category</th><th>Type</th><th>Price</th><th>Actions</th></tr>
+    <tr><th>${t('courseTable')}</th><th>${t('instructor')}</th><th>${t('category')}</th><th>${t('type')}</th><th>${t('price')}</th><th>${t('actions')}</th></tr>
     ${courses.map(c => `<tr>
       <td><strong>${c.name || "—"}</strong></td>
       <td style="color:var(--muted)">${c.instructor || "—"}</td>
-      <td><span class="badge badge-indigo">${c.category || "General"}</span></td>
+      <td><span class="badge badge-indigo">${c.category || t('general')}</span></td>
       <td><span class="badge ${typeBadge[c.type] || "badge-gray"}">${c.type || "—"}</span></td>
-      <td>${c.price ? `<strong>$${c.price}</strong>` : `<span style="color:var(--success);font-weight:700">Free</span>`}</td>
+      <td>${c.price ? `<strong>$${c.price}</strong>` : `<span style="color:var(--success);font-weight:700">${t('free')}</span>`}</td>
       <td><div class="action-btns">
         <button class="tbl-btn" data-action="edit-course" data-id="${c.id}" data-name="${(c.name || "").replace(/"/g, "")}" data-instructor="${(c.instructor || "").replace(/"/g, "")}" data-type="${c.type || "PDF"}" data-price="${c.price || 0}" data-desc="${(c.description || "").replace(/"/g, "")}" data-category="${(c.category || "").replace(/"/g, "")}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
@@ -718,8 +782,8 @@ function openAddCourse() {
   editingCourseId = null;
   ["c-name", "c-instructor", "c-price", "c-desc", "c-category"].forEach(id => $(id) && ($(id).value = ""));
   $("c-type").value = "PDF";
-  $("course-modal-title").textContent = "Add Course";
-  $("course-save-btn").textContent = "Add Course";
+  $("course-modal-title").textContent = t('addCourse');
+  $("course-save-btn").textContent = t('addCourse');
   openModal("course-modal");
 }
 
@@ -728,8 +792,8 @@ function editCourse(id, name, instructor, type, price, desc, category) {
   $("c-name").value = name; $("c-instructor").value = instructor;
   $("c-type").value = type; $("c-price").value = price; $("c-desc").value = desc;
   if ($("c-category")) $("c-category").value = category || "";
-  $("course-modal-title").textContent = "Edit Course";
-  $("course-save-btn").textContent = "Save Changes";
+  $("course-modal-title").textContent = t('editCourse');
+  $("course-save-btn").textContent = t('saveChanges');
   openModal("course-modal");
 }
 
@@ -737,11 +801,11 @@ $("course-save-btn").addEventListener("click", async () => {
   const name = ($("c-name").value || "").trim(), instructor = ($("c-instructor").value || "").trim();
   const type = $("c-type").value, price = parseFloat($("c-price").value) || 0;
   const description = ($("c-desc").value || "").trim(), category = ($("c-category")?.value || "General").trim();
-  if (!name || !instructor) { showToast("Fill all required fields", "error"); return; }
-  const btn = $("course-save-btn"); btn.disabled = true; btn.textContent = "Saving...";
+  if (!name || !instructor) { showToast(t('fillAllRequiredFields'), "error"); return; }
+  const btn = $("course-save-btn"); btn.disabled = true; btn.textContent = t('saving');
   try {
-    if (editingCourseId) { await updateDoc(doc(db, "courses", editingCourseId), { name, instructor, type, price, description, category }); showToast("Course updated"); }
-    else { await addDoc(collection(db, "courses"), { name, instructor, type, price, description, category, createdAt: serverTimestamp() }); showToast("Course added"); }
+    if (editingCourseId) { await updateDoc(doc(db, "courses", editingCourseId), { name, instructor, type, price, description, category }); showToast(t('courseUpdated')); }
+    else { await addDoc(collection(db, "courses"), { name, instructor, type, price, description, category, createdAt: serverTimestamp() }); showToast(t('courseAdded')); }
     closeModal("course-modal"); loadCourses();
   } catch (err) { showToast("Error: " + err.message, "error"); }
   finally { btn.disabled = false; btn.textContent = editingCourseId ? "Save Changes" : "Add Course"; }
@@ -753,16 +817,16 @@ $("course-save-btn").addEventListener("click", async () => {
 async function loadJobs() {
   $("main-content").innerHTML = `
     <div class="page-header">
-      <div class="page-header-left"><h1>Job Offers</h1><p>Manage career opportunities on the platform</p></div>
+      <div class="page-header-left"><h1>${t('jobOffers')}</h1><p>${t('manageCareerOpportunities')}</p></div>
     </div>
     <div class="card">
       <div class="toolbar">
-        <div class="search-bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="job-search" placeholder="Search jobs..." /></div>
-        <select class="filter-select" id="job-status-filter"><option value="">All Status</option><option>Active</option><option>Pending</option><option>Closed</option></select>
-        <select class="filter-select" id="job-type-filter"><option value="">All Types</option><option>Full-time</option><option>Part-time</option><option>Remote</option><option>Internship</option><option>Freelance</option></select>
-        <button class="btn btn-purple" id="add-job-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>Post Job</button>
+        <div class="search-bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="job-search" placeholder="${t('searchJobs')}" /></div>
+        <select class="filter-select" id="job-status-filter"><option value="">${t('allRoles')}</option><option>Active</option><option>Pending</option><option>Closed</option></select>
+        <select class="filter-select" id="job-type-filter"><option value="">${t('allRoles')}</option><option>Full-time</option><option>Part-time</option><option>Remote</option><option>Internship</option><option>Freelance</option></select>
+        <button class="btn btn-purple" id="add-job-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>${t('addUser')}</button>
       </div>
-      <div id="jobs-table-wrap"><div class="empty-state"><p>Loading...</p></div></div>
+      <div id="jobs-table-wrap"><div class="empty-state"><p>${t('loading')}</p></div></div>
     </div>`;
   $("add-job-btn").addEventListener("click", openAddJob);
   $("job-search").addEventListener("input", filterJobs);
@@ -791,11 +855,11 @@ async function loadJobs() {
 
 function renderJobsTable(jobs) {
   const wrap = $("jobs-table-wrap");
-  if (!jobs?.length) { wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><h4>No job offers yet</h4><p>Post the first job offer for learners</p></div>`; return; }
+  if (!jobs?.length) { wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><h4>${t('noJobOffersYet')}</h4><p>${t('manageCareerOpportunities')}</p></div>`; return; }
   const statusClass = { Active: "status-active", Pending: "status-pending", Closed: "status-closed" };
   const typeBadge = { "Full-time": "badge-blue", "Part-time": "badge-purple", "Remote": "badge-green", "Internship": "badge-orange", "Freelance": "badge-teal" };
   wrap.innerHTML = `<div class="table-wrap"><table>
-    <tr><th>Title</th><th>Company</th><th>Location</th><th>Type</th><th>Salary</th><th>Status</th><th>Actions</th></tr>
+    <tr><th>${t('course')}</th><th>${t('company')}</th><th>${t('location')}</th><th>${t('type')}</th><th>${t('salary')}</th><th>${t('status')}</th><th>${t('actions')}</th></tr>
     ${jobs.map(j => `<tr>
       <td><strong>${j.title || "—"}</strong></td>
       <td style="color:var(--muted)">${j.company || "—"}</td>
@@ -836,8 +900,8 @@ function openAddJob() {
   ["j-title", "j-company", "j-location", "j-salary", "j-desc"].forEach(id => $(id) && ($(id).value = ""));
   if ($("j-type")) $("j-type").value = "Full-time";
   if ($("j-status")) $("j-status").value = "Active";
-  $("job-modal-title").textContent = "Post Job Offer";
-  $("job-save-btn").textContent = "Post Job";
+  $("job-modal-title").textContent = t('postJobOffer');
+  $("job-save-btn").textContent = t('postJob');
   openModal("job-modal");
 }
 
@@ -850,15 +914,15 @@ function editJob(d) {
   $("j-salary").value = d.salary || "";
   $("j-status").value = d.status || "Active";
   $("j-desc").value = d.desc || "";
-  $("job-modal-title").textContent = "Edit Job Offer";
-  $("job-save-btn").textContent = "Save Changes";
+  $("job-modal-title").textContent = t('editJobOffer');
+  $("job-save-btn").textContent = t('saveChanges');
   openModal("job-modal");
 }
 
 $("job-save-btn").addEventListener("click", async () => {
   const title = ($("j-title").value || "").trim();
   const company = ($("j-company").value || "").trim();
-  if (!title || !company) { showToast("Fill all required fields", "error"); return; }
+  if (!title || !company) { showToast(t('fillAllRequiredFields'), "error"); return; }
   const data = {
     title, company,
     location: ($("j-location").value || "").trim(),
@@ -867,13 +931,13 @@ $("job-save-btn").addEventListener("click", async () => {
     status: $("j-status").value,
     description: ($("j-desc").value || "").trim(),
   };
-  const btn = $("job-save-btn"); btn.disabled = true; btn.textContent = "Saving...";
+  const btn = $("job-save-btn"); btn.disabled = true; btn.textContent = t('saving');
   try {
-    if (editingJobId) { await updateDoc(doc(db, "offers", editingJobId), data); showToast("Job updated"); }
-    else { await addDoc(collection(db, "offers"), { ...data, createdAt: serverTimestamp() }); showToast("Job posted"); }
+    if (editingJobId) { await updateDoc(doc(db, "offers", editingJobId), data); showToast(t('jobUpdated')); }
+    else { await addDoc(collection(db, "offers"), { ...data, createdAt: serverTimestamp() }); showToast(t('jobPosted')); }
     closeModal("job-modal"); loadJobs();
   } catch (err) { showToast("Error: " + err.message, "error"); }
-  finally { btn.disabled = false; btn.textContent = editingJobId ? "Save Changes" : "Post Job"; }
+  finally { btn.disabled = false; btn.textContent = editingJobId ? t('saveChanges') : t('postJob'); }
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -882,15 +946,15 @@ $("job-save-btn").addEventListener("click", async () => {
 async function loadCertificates() {
   $("main-content").innerHTML = `
     <div class="page-header">
-      <div class="page-header-left"><h1>Certificates</h1><p>Issue and manage learner certificates</p></div>
+      <div class="page-header-left"><h1>${t('certificates')}</h1><p>${t('issueAndManageCertificates')}</p></div>
     </div>
     <div class="card">
       <div class="toolbar">
-        <div class="search-bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="cert-search" placeholder="Search certificates..." /></div>
-        <select class="filter-select" id="cert-grade-filter"><option value="">All Grades</option><option>Distinction</option><option>Merit</option><option>Pass</option></select>
-        <button class="btn btn-purple" id="add-cert-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>Issue Certificate</button>
+        <div class="search-bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="cert-search" placeholder="${t('searchCertificates')}" /></div>
+        <select class="filter-select" id="cert-grade-filter"><option value="">${t('allRoles')}</option><option>Distinction</option><option>Merit</option><option>Pass</option></select>
+        <button class="btn btn-purple" id="add-cert-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>${t('addUser')}</button>
       </div>
-      <div id="certs-table-wrap"><div class="empty-state"><p>Loading...</p></div></div>
+      <div id="certs-table-wrap"><div class="empty-state"><p>${t('loading')}</p></div></div>
     </div>`;
   $("add-cert-btn").addEventListener("click", openAddCert);
   $("cert-search").addEventListener("input", filterCerts);
@@ -907,10 +971,10 @@ async function loadCertificates() {
 
 function renderCertsTable(certs) {
   const wrap = $("certs-table-wrap");
-  if (!certs?.length) { wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg><h4>No certificates issued</h4><p>Issue your first certificate to a learner</p></div>`; return; }
+  if (!certs?.length) { wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg><h4>${t('noCertificatesIssued')}</h4><p>${t('issueAndManageCertificates')}</p></div>`; return; }
   const gradeBadge = { Distinction: "badge-purple", Merit: "badge-blue", Pass: "badge-green" };
   wrap.innerHTML = `<div class="table-wrap"><table>
-    <tr><th>Learner</th><th>Course</th><th>Certificate ID</th><th>Grade</th><th>Issue Date</th><th>Actions</th></tr>
+    <tr><th>${t('learner')}</th><th>${t('course')}</th><th>${t('certificateId')}</th><th>${t('grade')}</th><th>${t('issueDate')}</th><th>${t('actions')}</th></tr>
     ${certs.map(c => `<tr>
       <td><div style="display:flex;align-items:center;gap:9px;"><div class="avatar" style="width:28px;height:28px;font-size:11px;">${(c.learner || "?").charAt(0).toUpperCase()}</div><strong>${c.learner || "—"}</strong></div></td>
       <td style="color:var(--muted)">${c.course || "—"}</td>
@@ -947,25 +1011,25 @@ function openAddCert() {
   $("cert-grade").value = "Distinction";
   $("cert-date").value = new Date().toISOString().split("T")[0];
   $("cert-id").value = genCertId();
-  $("cert-modal-title").textContent = "Issue Certificate";
-  $("cert-save-btn").textContent = "Issue Certificate";
+  $("cert-modal-title").textContent = t('addUser');
+  $("cert-save-btn").textContent = t('addUser');
   openModal("cert-modal");
 }
 
 $("cert-save-btn").addEventListener("click", async () => {
   const learner = ($("cert-learner").value || "").trim();
   const course = ($("cert-course").value || "").trim();
-  if (!learner || !course) { showToast("Fill all required fields", "error"); return; }
+  if (!learner || !course) { showToast(t('fillAllRequiredFields'), "error"); return; }
   const certId = $("cert-id").value || genCertId();
   const grade = $("cert-grade").value;
   const issueDate = $("cert-date").value;
-  const btn = $("cert-save-btn"); btn.disabled = true; btn.textContent = "Issuing...";
+  const btn = $("cert-save-btn"); btn.disabled = true; btn.textContent = t('issuing');
   try {
     await addDoc(collection(db, "certificates"), { learner, course, certId, grade, issueDate, createdAt: serverTimestamp() });
-    showToast("Certificate issued successfully");
+    showToast(t('certificateIssuedSuccessfully'));
     closeModal("cert-modal"); loadCertificates();
   } catch (err) { showToast("Error: " + err.message, "error"); }
-  finally { btn.disabled = false; btn.textContent = "Issue Certificate"; }
+  finally { btn.disabled = false; btn.textContent = t('addUser'); }
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -974,7 +1038,7 @@ $("cert-save-btn").addEventListener("click", async () => {
 async function loadPayments() {
   $("main-content").innerHTML = `
     <div class="page-header">
-      <div class="page-header-left"><h1>Payments</h1><p>Track all transactions and revenue</p></div>
+      <div class="page-header-left"><h1>${t('payments')}</h1><p>${t('trackTransactions')}</p></div>
     </div>
     <div class="stat-grid stat-grid-2" style="margin-bottom:20px;" id="pay-stats">
       <div class="stat-card"><div class="skeleton" style="height:70px;border-radius:8px;"></div></div>
@@ -982,11 +1046,11 @@ async function loadPayments() {
     </div>
     <div class="card">
       <div class="toolbar">
-        <div class="search-bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="pay-search" placeholder="Search by user or course..." /></div>
-        <select class="filter-select" id="pay-status-filter"><option value="">All Status</option><option>Completed</option><option>Pending</option><option>Refunded</option></select>
-        <button class="btn btn-purple" id="add-pay-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>Add Transaction</button>
+        <div class="search-bar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="pay-search" placeholder="${t('searchByUserOrCourse')}" /></div>
+        <select class="filter-select" id="pay-status-filter"><option value="">${t('allRoles')}</option><option>Completed</option><option>Pending</option><option>Refunded</option></select>
+        <button class="btn btn-purple" id="add-pay-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>${t('addUser')}</button>
       </div>
-      <div id="pay-table-wrap"><div class="empty-state"><p>Loading...</p></div></div>
+      <div id="pay-table-wrap"><div class="empty-state"><p>${t('loading')}</p></div></div>
     </div>`;
   $("add-pay-btn").addEventListener("click", () => {
     showToast("Manual transaction entry coming soon", "info");
@@ -1019,10 +1083,10 @@ async function loadPayments() {
 
 function renderPaymentsTable(payments) {
   const wrap = $("pay-table-wrap");
-  if (!payments?.length) { wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg><h4>No transactions yet</h4><p>Payment records will appear here</p></div>`; return; }
+  if (!payments?.length) { wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg><h4>${t('noTransactionsYet')}</h4><p>${t('trackTransactions')}</p></div>`; return; }
   const statusBadge = { Completed: "badge-green", Pending: "badge-orange", Refunded: "badge-gray" };
   wrap.innerHTML = `<div class="table-wrap"><table>
-    <tr><th>Transaction ID</th><th>User</th><th>Course</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+    <tr><th>${t('transactionId')}</th><th>${t('user')}</th><th>${t('course')}</th><th>${t('amount')}</th><th>${t('method')}</th><th>${t('status')}</th><th>${t('date')}</th><th>${t('actions')}</th></tr>
     ${payments.map(p => `<tr>
       <td><code style="font-size:11px;background:var(--bg);padding:2px 7px;border-radius:5px;">${p.txId || p.id.slice(0, 8).toUpperCase()}</code></td>
       <td>${p.user || "—"}</td>
@@ -1061,7 +1125,7 @@ function filterPayments() {
 async function renderStatistics() {
   $("main-content").innerHTML = `
     <div class="page-header">
-      <div class="page-header-left"><h1>Statistics</h1><p>Platform analytics and performance insights</p></div>
+      <div class="page-header-left"><h1>${t('statistics')}</h1><p>${t('platformAnalytics')}</p></div>
     </div>
     <div id="stats-loading">
       <div class="stat-grid stat-grid-4" style="margin-bottom:20px;">
@@ -1124,7 +1188,7 @@ async function renderStatistics() {
             </div>
             <div class="stat-trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>Live</div>
           </div>
-          <div class="stat-label">Total Users</div>
+          <div class="stat-label">${t('totalUsers')}</div>
           <div class="stat-value">${totalUsers}</div>
         </div>
         <div class="stat-card">
@@ -1134,7 +1198,7 @@ async function renderStatistics() {
             </div>
             <div class="stat-trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>Live</div>
           </div>
-          <div class="stat-label">Total Revenue</div>
+          <div class="stat-label">${t('totalRevenue')}</div>
           <div class="stat-value">$${totalRevenue.toFixed(0)}</div>
         </div>
         <div class="stat-card">
@@ -1144,7 +1208,7 @@ async function renderStatistics() {
             </div>
             <div class="stat-trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>Live</div>
           </div>
-          <div class="stat-label">Total Courses</div>
+          <div class="stat-label">${t('courses')}</div>
           <div class="stat-value">${totalCourses}</div>
         </div>
         <div class="stat-card">
@@ -1154,7 +1218,7 @@ async function renderStatistics() {
             </div>
             <div class="stat-trend up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>Live</div>
           </div>
-          <div class="stat-label">Certificates Issued</div>
+          <div class="stat-label">${t('certificates')}</div>
           <div class="stat-value">${totalCerts}</div>
         </div>
       </div>
@@ -1162,7 +1226,7 @@ async function renderStatistics() {
       <!-- Row 2: Users by Role + Course Types -->
       <div class="grid-2" style="margin-bottom:20px;">
         <div class="card">
-          <div class="card-header"><h3>Users by Role</h3><span class="meta">${totalUsers} total</span></div>
+          <div class="card-header"><h3>${t('userRoles')}</h3><span class="meta">${totalUsers} total</span></div>
           ${totalUsers ? Object.entries(roleCounts).map(([role, count]) => {
       const pct = Math.round((count / totalUsers) * 100);
       return `<div style="margin-bottom:16px;">
@@ -1177,7 +1241,7 @@ async function renderStatistics() {
     }).join("") : `<div class="empty-state"><p>No users yet</p></div>`}
         </div>
         <div class="card">
-          <div class="card-header"><h3>Course Types</h3><span class="meta">${totalCourses} total</span></div>
+          <div class="card-header"><h3>${t('courses')}</h3><span class="meta">${totalCourses} total</span></div>
           ${totalCourses ? Object.entries(courseTypes).map(([type, count]) => {
       const pct = Math.round((count / totalCourses) * 100);
       return `<div style="margin-bottom:16px;">
@@ -1196,7 +1260,7 @@ async function renderStatistics() {
       <!-- Row 3: Job Offers Status + Payments + Certs -->
       <div class="grid-2" style="margin-bottom:20px;">
         <div class="card">
-          <div class="card-header"><h3>Job Offers Status</h3><span class="meta">${totalOffers} total</span></div>
+          <div class="card-header"><h3>${t('jobOffers')}</h3><span class="meta">${totalOffers} total</span></div>
           ${[
         { label: "Active", count: jobStatus.Active, color: "var(--success)", badge: "badge-green" },
         { label: "Pending", count: jobStatus.Pending, color: "var(--warning)", badge: "badge-orange" },
@@ -1215,7 +1279,7 @@ async function renderStatistics() {
       }).join("")}
         </div>
         <div class="card">
-          <div class="card-header"><h3>Payments Summary</h3><span class="meta">${totalTx} transactions</span></div>
+          <div class="card-header"><h3>${t('payments')}</h3><span class="meta">${totalTx} transactions</span></div>
           ${[
         { icon: "💰", label: "Completed Revenue", value: `$${totalRevenue.toFixed(2)}`, color: "var(--success)" },
         { icon: "⏳", label: "Pending Amount", value: `$${pendingRev.toFixed(2)}`, color: "var(--warning)" },
@@ -1233,7 +1297,7 @@ async function renderStatistics() {
 
       <!-- Row 4: Certificate Grades -->
       <div class="card">
-        <div class="card-header"><h3>Certificate Grades</h3><span class="meta">${totalCerts} issued</span></div>
+        <div class="card-header"><h3>${t('certificates')}</h3><span class="meta">${totalCerts} issued</span></div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding-top:4px;">
           ${[
         { label: "Distinction", count: gradeCount.Distinction, color: "#8b5cf6", bg: "#ede9fe", icon: "🥇" },
@@ -1256,25 +1320,277 @@ async function renderStatistics() {
 }
 
 function renderSettings() {
+  const currentLang = localStorage.getItem('language') || 'en';
+  const darkMode = localStorage.getItem('darkMode') === 'true';
+
   $("main-content").innerHTML = `
     <div class="page-header">
-      <div class="page-header-left"><h1>Settings</h1><p>Configure your platform preferences</p></div>
+      <div class="page-header-left"><h1>${t('settings')}</h1><p>${t('configurePreferences')}</p></div>
     </div>
-    <div class="card settings-section">
-      <div class="card-header"><h3>Account Information</h3></div>
+
+    <!-- Account Section -->
+    <div class="card settings-section" style="border-left: 4px solid var(--primary);">
+      <div class="card-header" style="display:flex;align-items:center;gap:10px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <h3>${t('settingsAccount')}</h3>
+      </div>
       <div class="settings-grid">
-        <div class="settings-field"><label>Email Address</label><input type="email" value="${currentUser?.email || ""}" readonly style="opacity:0.7;cursor:default;background:#f8fafc"/></div>
-        <div class="settings-field"><label>Role</label><input type="text" value="Administrator" readonly style="opacity:0.7;cursor:default;background:#f8fafc"/></div>
+        <div class="settings-field">
+          <label>${t('emailAddress')}</label>
+          <div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--muted);"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            <span style="color:var(--text);font-weight:500;">${currentUser?.email || "—"}</span>
+          </div>
+        </div>
+        <div class="settings-field">
+          <label>${t('role')}</label>
+          <div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--primary);"><circle cx="12" cy="12" r="10"/><path d="M12 6v6m3-3H9"/></svg>
+            <span style="color:var(--text);font-weight:500;background:var(--primary-light);padding:4px 10px;border-radius:6px;">${t('administrator')}</span>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="card settings-section">
-      <div class="card-header"><h3>Danger Zone</h3></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;border:1.5px solid var(--danger);border-radius:10px;background:#fff5f5;">
-        <div>
-          <div style="font-size:14px;font-weight:700;color:var(--danger);">Clear All Data</div>
-          <div style="font-size:13px;color:var(--muted);">This will permanently delete all users, courses, and records</div>
+
+    <!-- Change Password Section -->
+    <div class="card settings-section" style="border-left: 4px solid var(--warning);">
+      <div class="card-header" style="display:flex;align-items:center;gap:10px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <h3>${t('changePassword')}</h3>
+      </div>
+      <div class="settings-grid">
+        <div class="settings-field"><label>${t('currentPassword')}</label><input type="password" id="current-password" placeholder="••••••••"/></div>
+        <div class="settings-field"><label>${t('newPassword')}</label><input type="password" id="new-password" placeholder="••••••••"/></div>
+        <div class="settings-field"><label>${t('confirmPassword')}</label><input type="password" id="confirm-password" placeholder="••••••••"/></div>
+      </div>
+      <button class="btn btn-primary" id="change-password-btn" style="margin-top:20px;align-self:flex-start;">${t('changePasswordBtn')}</button>
+    </div>
+
+    <!-- Preferences Section -->
+    <div class="card settings-section" style="border-left: 4px solid var(--accent);">
+      <div class="card-header" style="display:flex;align-items:center;gap:10px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24"/></svg>
+        <h3>${t('preferences')}</h3>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div class="settings-field">
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.5 12a10.5 10.5 0 1 1-21 0 10.5 10.5 0 0 1 21 0"/><path d="M14 12h-4m6-6a6 6 0 0 0-12 0m6 12a6 6 0 0 0-6-6"/></svg>
+            ${t('language')}
+          </label>
+          <select id="language-select" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);font-weight:500;cursor:pointer;">
+            <option value="en" ${currentLang === 'en' ? 'selected' : ''}>${t('english')}</option>
+            <option value="fr" ${currentLang === 'fr' ? 'selected' : ''}>${t('francais')}</option>
+            <option value="ar" ${currentLang === 'ar' ? 'selected' : ''}>${t('arabic')}</option>
+          </select>
         </div>
-        <button class="btn btn-danger" onclick="showToast('This action is disabled in demo mode','error')">Clear Data</button>
+        <div class="settings-field">
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            ${t('theme')}
+          </label>
+          <div class="toggle" id="dark-mode-toggle-container" style="justify-content:flex-start;">
+            <input type="checkbox" id="dark-mode-toggle" ${darkMode ? 'checked' : ''}>
+            <div class="track">
+              <div class="thumb"></div>
+            </div>
+            <span class="toggle-label" style="margin-left:10px;">${darkMode ? t('dark') : t('light')}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Support Section -->
+    <div class="card settings-section" style="border-left: 4px solid var(--success);">
+      <div class="card-header" style="display:flex;align-items:center;gap:10px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <h3>${t('support')}</h3>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:linear-gradient(135deg, rgba(34,197,94,0.05) 0%, rgba(34,197,94,0.02) 100%);border-radius:10px;border:1px solid var(--border);">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;">${t('contactSupport')}</div>
+          <div style="font-size:13px;color:var(--muted);">${t('supportDescription')}</div>
+        </div>
+        <button class="btn btn-primary" onclick="window.open('mailto:support@formanova.com')" style="white-space:nowrap;margin-left:20px;">${t('contactSupport')}</button>
+      </div>
+    </div>
+
+    <!-- Sign Out Section -->
+    <div class="card settings-section" style="border-left: 4px solid var(--danger);">
+      <div class="card-header" style="display:flex;align-items:center;gap:10px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <h3>${t('signOut')}</h3>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:linear-gradient(135deg, rgba(239,68,68,0.05) 0%, rgba(239,68,68,0.02) 100%);border-radius:10px;border:1px solid var(--border);">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;">${t('signOut')}</div>
+          <div style="font-size:13px;color:var(--muted);">${t('signOutDescription')}</div>
+        </div>
+        <button class="btn btn-danger" id="sign-out-btn" style="white-space:nowrap;margin-left:20px;">${t('signOut')}</button>
+      </div>
+    </div>
+
+    <div class="card settings-section">
+      <div class="card-header"><h3>${t('dangerZone')}</h3></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(239,68,68,0.03) 100%);border-radius:10px;border:1.5px solid var(--danger);">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--danger);">${t('clearData')}</div>
+          <div style="font-size:13px;color:var(--muted);">${t('clearDataDesc')}</div>
+        </div>
+        <button class="btn btn-danger" onclick="showToast('This action is disabled in demo mode','error')" style="white-space:nowrap;margin-left:20px;">${t('clearData')}</button>
       </div>
     </div>`;
+
+  // Add event listeners
+  const langSelect = $('language-select');
+  const darkToggleContainer = $('dark-mode-toggle-container');
+  const changePasswordBtn = $('change-password-btn');
+  const signOutBtn = $('sign-out-btn');
+
+  if (langSelect) {
+    langSelect.addEventListener('change', (e) => {
+      changeLanguage(e.target.value);
+    });
+  }
+
+  if (darkToggleContainer) {
+    darkToggleContainer.addEventListener('click', (e) => {
+      const checkbox = darkToggleContainer.querySelector('#dark-mode-toggle');
+      if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        toggleDarkMode(checkbox.checked);
+        const label = darkToggleContainer.querySelector('.toggle-label');
+        if (label) label.textContent = checkbox.checked ? t('dark') : t('light');
+      }
+    });
+  }
+
+  if (changePasswordBtn) {
+    changePasswordBtn.addEventListener('click', changePasswordHandler);
+  }
+
+  if (signOutBtn) {
+    signOutBtn.addEventListener('click', signOutHandler);
+  }
+}
+
+// ── Change Password Handler ────────────────────────────────────────
+async function changePasswordHandler() {
+  const currentPassword = $('current-password')?.value?.trim();
+  const newPassword = $('new-password')?.value?.trim();
+  const confirmPassword = $('confirm-password')?.value?.trim();
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    showToast(t('fillAllRequiredFields'), 'error');
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    showToast(t('passwordsDoNotMatch'), 'error');
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    showToast(t('passwordTooShort'), 'error');
+    return;
+  }
+
+  const btn = $('change-password-btn');
+  const originalText = btn.textContent;
+  btn.textContent = t('saving');
+  btn.disabled = true;
+
+  try {
+    // Re-authenticate the user with current password
+    const user = auth.currentUser;
+    if (!user || !user.email) {
+      showToast(t('sessionExpired'), 'error');
+      navigate('login');
+      return;
+    }
+
+    // Re-authenticate using email and password
+    const credential = await signInWithEmailAndPassword(auth, user.email, currentPassword);
+    
+    // Update password
+    await updatePassword(credential.user, newPassword);
+    
+    // Clear password fields
+    $('current-password').value = '';
+    $('new-password').value = '';
+    $('confirm-password').value = '';
+    
+    showToast(t('passwordChanged'), 'success');
+  } catch (error) {
+    if (error.code === 'auth/wrong-password') {
+      showToast(t('invalidPassword'), 'error');
+    } else if (error.code === 'auth/weak-password') {
+      showToast(t('passwordTooShort'), 'error');
+    } else {
+      console.error('Password change error:', error);
+      showToast(t('errorMsg') + ': ' + error.message, 'error');
+    }
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+// ── Sign Out Handler ────────────────────────────────────────────────
+async function signOutHandler() {
+  if (!confirm(t('areYouSureSignOut'))) {
+    return;
+  }
+
+  const btn = $('sign-out-btn');
+  const originalText = btn.textContent;
+  btn.textContent = t('signingOut');
+  btn.disabled = true;
+
+  try {
+    await signOut(auth);
+    localStorage.removeItem('currentUser');
+    navigate('login');
+    showToast(t('success'), 'success');
+  } catch (error) {
+    console.error('Sign out error:', error);
+    showToast(t('errorMsg') + ': ' + error.message, 'error');
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+// ── App Usage Tracker ──────────────────────────────────────────────
+let usageTrackingInterval = null;
+function trackAppUsage() {
+  // Clear any existing interval
+  if (usageTrackingInterval) clearInterval(usageTrackingInterval);
+  
+  function updateUsage() {
+    const dailyUsage = JSON.parse(localStorage.getItem('dailyUsage') || '{}');
+    const today = new Date().toDateString();
+    
+    // Initialize today's usage if not exists
+    if (!dailyUsage[today]) {
+      dailyUsage[today] = 1; // Start with 1 minute
+    } else {
+      dailyUsage[today]++;
+    }
+    
+    // Clean up old entries (keep last 90 days)
+    const today_obj = new Date();
+    for (const date in dailyUsage) {
+      const entryDate = new Date(date);
+      const daysOld = Math.floor((today_obj - entryDate) / (1000 * 60 * 60 * 24));
+      if (daysOld > 90) {
+        delete dailyUsage[date];
+      }
+    }
+    
+    localStorage.setItem('dailyUsage', JSON.stringify(dailyUsage));
+  }
+  
+  // Update every minute (60000 ms)
+  updateUsage(); // Update immediately on first call
+  usageTrackingInterval = setInterval(updateUsage, 60000);
 }
