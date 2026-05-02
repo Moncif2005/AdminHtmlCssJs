@@ -75,7 +75,7 @@
     <div class="header-right">
       <div id="sync-status" style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--success);margin-right:6px;">
         <span style="width:7px;height:7px;border-radius:50%;background:var(--success);display:inline-block;animation:pulse 2s infinite;"></span>
-        <span>Live</span>
+        <span data-i18n="live">Live</span>
       </div>
       <div class="dropdown-wrapper">
         <button class="icon-btn" id="notif-btn">
@@ -84,8 +84,8 @@
         </button>
         <div class="dropdown-menu" id="notif-dd" style="min-width:300px;">
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px 6px;">
-            <span style="font-size:13px;font-weight:700;">Notifications</span>
-            <span style="font-size:12px;color:var(--primary);cursor:pointer;font-weight:600;" id="mark-read-btn">Mark all read</span>
+            <span style="font-size:13px;font-weight:700;" data-i18n="notifications">Notifications</span>
+            <span style="font-size:12px;color:var(--primary);cursor:pointer;font-weight:600;" id="mark-read-btn" data-i18n="markAllRead">Mark all read</span>
           </div>
           <hr style="border:none;border-top:1px solid var(--border);margin:4px 0;"/>
           <div id="notif-list"></div>
@@ -98,16 +98,16 @@
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="dropdown-menu" id="user-dd">
-          <div class="dropdown-label">My Account</div>
+          <div class="dropdown-label" data-i18n="myAccount">My Account</div>
           <hr/>
           <button class="dropdown-item" id="go-settings-btn">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-            Settings
+            <span data-i18n="settings">Settings</span>
           </button>
           <hr/>
           <button class="dropdown-item danger" id="logout-btn">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-            Log out
+            <span data-i18n="logOut">Log out</span>
           </button>
         </div>
       </div>
@@ -120,11 +120,11 @@
 <div class="confirm-overlay" id="confirm-overlay">
   <div class="confirm-dialog">
     <div class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></div>
-    <h3>Confirm Delete</h3>
+    <h3 data-i18n="confirmDelete">Confirm Delete</h3>
     <p id="confirm-msg">Are you sure?</p>
     <div class="btns">
-      <button class="btn btn-outline" id="cancel-delete-btn">Cancel</button>
-      <button class="btn btn-danger" id="confirm-delete-btn">Delete</button>
+      <button class="btn btn-outline" id="cancel-delete-btn" data-i18n="cancel">Cancel</button>
+      <button class="btn btn-danger" id="confirm-delete-btn" data-i18n="delete">Delete</button>
     </div>
   </div>
 </div>
@@ -133,31 +133,30 @@
 <div class="modal-overlay" id="user-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3 id="user-modal-title">Add User</h3>
+      <h3 id="user-modal-title" data-i18n="editUser">Edit User</h3>
       <button class="modal-close" id="close-user-modal"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg></button>
     </div>
     <div class="modal-body">
       <div class="form-row-2">
-        <div class="form-field"><label>Full Name *</label><input type="text" id="u-name" placeholder="John Doe" /></div>
-        <div class="form-field"><label>Email *</label><input type="email" id="u-email" placeholder="john@example.com" /></div>
+        <div class="form-field"><label data-i18n="fullName">Full Name *</label><input type="text" id="u-name" placeholder="John Doe" /></div>
+        <div class="form-field"><label data-i18n="email">Email *</label><input type="email" id="u-email" placeholder="john@example.com" /></div>
       </div>
-      <div class="form-field" id="u-pw-wrap"><label>Password *</label><input type="password" id="u-password" placeholder="••••••••" /></div>
       <div class="form-row-2">
         <div class="form-field">
-          <label>Role</label>
+          <label data-i18n="role">Role</label>
           <select id="u-type">
-            <option value="Learner">Learner</option>
-            <option value="Instructor">Instructor</option>
-            <option value="Admin">Admin</option>
-            <option value="Recruiter">Recruiter</option>
+            <option value="Learner" data-i18n="learner">Learner</option>
+            <option value="Instructor" data-i18n="instructor">Instructor</option>
+            <option value="Admin" data-i18n="admin">Admin</option>
+            <option value="Recruiter" data-i18n="recruiter">Recruiter</option>
           </select>
         </div>
-        <div class="form-field"><label>Phone</label><input type="text" id="u-phone" placeholder="+213 xxx xxx xxx" /></div>
+        <div class="form-field"><label data-i18n="phone">Phone</label><input type="text" id="u-phone" placeholder="+213 xxx xxx xxx" /></div>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" id="cancel-user-btn">Cancel</button>
-      <button class="btn btn-purple" id="user-save-btn">Add User</button>
+      <button class="btn btn-outline" id="cancel-user-btn" data-i18n="cancel">Cancel</button>
+      <button class="btn btn-purple" id="user-save-btn" data-i18n="saveChanges">Save Changes</button>
     </div>
   </div>
 </div>
@@ -166,24 +165,24 @@
 <div class="modal-overlay" id="course-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3 id="course-modal-title">Add Course</h3>
+      <h3 id="course-modal-title" data-i18n="editCourse">Edit Course</h3>
       <button class="modal-close" id="close-course-modal"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg></button>
     </div>
     <div class="modal-body">
       <div class="form-row-2">
-        <div class="form-field"><label>Course Name *</label><input type="text" id="c-name" placeholder="Introduction to React" /></div>
-        <div class="form-field"><label>Instructor *</label><input type="text" id="c-instructor" placeholder="Dr. Smith" /></div>
+        <div class="form-field"><label data-i18n="courseName">Course Name *</label><input type="text" id="c-name" placeholder="Introduction to React" /></div>
+        <div class="form-field"><label data-i18n="instructor">Instructor *</label><input type="text" id="c-instructor" placeholder="Dr. Smith" /></div>
       </div>
       <div class="form-row-2">
-        <div class="form-field"><label>Type</label><select id="c-type"><option value="PDF">PDF</option><option value="MP4">MP4</option><option value="PPTX">PPTX</option><option value="DOC">DOC</option><option value="MP3">MP3</option></select></div>
-        <div class="form-field"><label>Price ($)</label><input type="number" id="c-price" placeholder="0" min="0" /></div>
+        <div class="form-field"><label data-i18n="type">Type</label><select id="c-type"><option value="PDF">PDF</option><option value="MP4">MP4</option><option value="PPTX">PPTX</option><option value="DOC">DOC</option><option value="MP3">MP3</option></select></div>
+        <div class="form-field"><label data-i18n="price">Price ($)</label><input type="number" id="c-price" placeholder="0" min="0" /></div>
       </div>
-      <div class="form-field"><label>Category</label><input type="text" id="c-category" placeholder="e.g. Technology, Business..." /></div>
-      <div class="form-field"><label>Description</label><textarea id="c-desc" placeholder="Course description..."></textarea></div>
+      <div class="form-field"><label data-i18n="category">Category</label><input type="text" id="c-category" placeholder="e.g. Technology, Business..." /></div>
+      <div class="form-field"><label data-i18n="description">Description</label><textarea id="c-desc" placeholder="Course description..."></textarea></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" id="cancel-course-btn">Cancel</button>
-      <button class="btn btn-purple" id="course-save-btn">Add Course</button>
+      <button class="btn btn-outline" id="cancel-course-btn" data-i18n="cancel">Cancel</button>
+      <button class="btn btn-purple" id="course-save-btn" data-i18n="saveChanges">Save Changes</button>
     </div>
   </div>
 </div>
@@ -192,27 +191,27 @@
 <div class="modal-overlay" id="job-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3 id="job-modal-title">Post Job Offer</h3>
+      <h3 id="job-modal-title" data-i18n="postJob">Post Job Offer</h3>
       <button class="modal-close" id="close-job-modal"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg></button>
     </div>
     <div class="modal-body">
       <div class="form-row-2">
-        <div class="form-field"><label>Job Title *</label><input type="text" id="j-title" placeholder="Senior Frontend Developer" /></div>
-        <div class="form-field"><label>Company *</label><input type="text" id="j-company" placeholder="Acme Corp" /></div>
+        <div class="form-field"><label data-i18n="jobTitle">Job Title *</label><input type="text" id="j-title" placeholder="Senior Frontend Developer" /></div>
+        <div class="form-field"><label data-i18n="company">Company *</label><input type="text" id="j-company" placeholder="Acme Corp" /></div>
       </div>
       <div class="form-row-2">
-        <div class="form-field"><label>Location</label><input type="text" id="j-location" placeholder="Tlemcen, Algeria" /></div>
-        <div class="form-field"><label>Type</label><select id="j-type"><option>Full-time</option><option>Part-time</option><option>Remote</option><option>Internship</option><option>Freelance</option></select></div>
+        <div class="form-field"><label data-i18n="location">Location</label><input type="text" id="j-location" placeholder="Tlemcen, Algeria" /></div>
+        <div class="form-field"><label data-i18n="type">Type</label><select id="j-type"><option data-i18n="fullTime">Full-time</option><option data-i18n="partTime">Part-time</option><option data-i18n="remote">Remote</option><option data-i18n="internship">Internship</option><option data-i18n="freelance">Freelance</option></select></div>
       </div>
       <div class="form-row-2">
-        <div class="form-field"><label>Salary Range</label><input type="text" id="j-salary" placeholder="e.g. $2,000 – $3,500/mo" /></div>
-        <div class="form-field"><label>Status</label><select id="j-status"><option>Active</option><option>Pending</option><option>Closed</option></select></div>
+        <div class="form-field"><label data-i18n="salaryRange">Salary Range</label><input type="text" id="j-salary" placeholder="e.g. $2,000 – $3,500/mo" /></div>
+        <div class="form-field"><label data-i18n="status">Status</label><select id="j-status"><option data-i18n="active">Active</option><option data-i18n="pending">Pending</option><option data-i18n="closed">Closed</option></select></div>
       </div>
-      <div class="form-field"><label>Description</label><textarea id="j-desc" placeholder="Job description, requirements, responsibilities..."></textarea></div>
+      <div class="form-field"><label data-i18n="descriptionJob">Description</label><textarea id="j-desc" placeholder="Job description, requirements, responsibilities..."></textarea></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" id="cancel-job-btn">Cancel</button>
-      <button class="btn btn-purple" id="job-save-btn">Post Job</button>
+      <button class="btn btn-outline" id="cancel-job-btn" data-i18n="cancel">Cancel</button>
+      <button class="btn btn-purple" id="job-save-btn" data-i18n="postJob">Post Job</button>
     </div>
   </div>
 </div>
@@ -221,23 +220,23 @@
 <div class="modal-overlay" id="cert-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3 id="cert-modal-title">Issue Certificate</h3>
+      <h3 id="cert-modal-title" data-i18n="issueCert">Issue Certificate</h3>
       <button class="modal-close" id="close-cert-modal"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg></button>
     </div>
     <div class="modal-body">
       <div class="form-row-2">
-        <div class="form-field"><label>Learner Name *</label><input type="text" id="cert-learner" placeholder="Jane Doe" /></div>
-        <div class="form-field"><label>Course *</label><input type="text" id="cert-course" placeholder="React Fundamentals" /></div>
+        <div class="form-field"><label data-i18n="learnerName">Learner Name *</label><input type="text" id="cert-learner" placeholder="Jane Doe" /></div>
+        <div class="form-field"><label data-i18n="courseCert">Course *</label><input type="text" id="cert-course" placeholder="React Fundamentals" /></div>
       </div>
       <div class="form-row-2">
-        <div class="form-field"><label>Issue Date</label><input type="date" id="cert-date" /></div>
-        <div class="form-field"><label>Grade</label><select id="cert-grade"><option>Distinction</option><option>Merit</option><option>Pass</option></select></div>
+        <div class="form-field"><label data-i18n="issueDate">Issue Date</label><input type="date" id="cert-date" /></div>
+        <div class="form-field"><label data-i18n="grade">Grade</label><select id="cert-grade"><option data-i18n="distinction">Distinction</option><option data-i18n="merit">Merit</option><option data-i18n="pass">Pass</option></select></div>
       </div>
-      <div class="form-field"><label>Certificate ID</label><input type="text" id="cert-id" placeholder="Auto-generated" readonly style="opacity:0.6;cursor:default;background:#f8fafc"/></div>
+      <div class="form-field"><label data-i18n="certId">Certificate ID</label><input type="text" id="cert-id" placeholder="Auto-generated" readonly style="opacity:0.6;cursor:default;background:#f8fafc"/></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" id="cancel-cert-btn">Cancel</button>
-      <button class="btn btn-purple" id="cert-save-btn">Issue Certificate</button>
+      <button class="btn btn-outline" id="cancel-cert-btn" data-i18n="cancel">Cancel</button>
+      <button class="btn btn-purple" id="cert-save-btn" data-i18n="issueCert">Issue Certificate</button>
     </div>
   </div>
 </div>
